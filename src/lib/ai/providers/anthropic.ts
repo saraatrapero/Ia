@@ -14,6 +14,18 @@ export const anthropicAdapter: ProviderAdapter = {
   id: "anthropic",
   isConfigured: () => Boolean(process.env.ANTHROPIC_API_KEY),
 
+  async listModels() {
+    try {
+      const ids: string[] = [];
+      for await (const m of getClient().models.list()) ids.push(m.id);
+      return ids;
+    } catch (err) {
+      if (err instanceof Anthropic.AuthenticationError) throw new ProviderError("anthropic", "La clave de API de Anthropic no es válida.");
+      if (err instanceof Anthropic.APIError) throw new ProviderError("anthropic", `Error de Anthropic (${err.status ?? "red"}): ${err.message}`);
+      throw err;
+    }
+  },
+
   async stream({ apiModel, system, messages, signal }, onText) {
     const useFallback = SERVER_FALLBACK_MODELS.has(apiModel);
     try {

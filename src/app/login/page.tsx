@@ -1,8 +1,14 @@
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth/session";
+import { db } from "@/lib/db";
 import { LoginForm } from "./login-form";
 
 export const metadata = { title: "Acceso" };
+export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  if ((await db.user.count()) === 0) redirect("/setup");
+  if (await getCurrentUser()) redirect("/");
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(79,140,255,0.16),transparent_60%)]" />

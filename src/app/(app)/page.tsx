@@ -40,6 +40,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     db.aiModel.findMany({ where: { enabled: true }, select: { provider: true } }),
   ]);
 
+  const anyCost = series.some((d) => d.value > 0) || models.some((m) => m.cost > 0);
   const myBudget = user.monthlyBudgetUsd ?? num(settings.default_user_budget_usd);
   const mySpend = mine._sum.costUsd ?? 0;
   const pct = myBudget ? Math.min(100, (mySpend / myBudget) * 100) : null;
@@ -66,7 +67,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div className="mb-6 rounded-xl border border-warn/30 bg-warn/10 p-4 text-sm">
           <p className="font-medium text-warn">Ningún proveedor de IA está conectado</p>
           <p className="mt-1 text-muted">
-            Añade <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code> y/o <code>GEMINI_API_KEY</code> en el archivo <code>.env</code> del servidor y reinícialo.
+            Para empezar gratis añade al menos una de estas claves en las variables de entorno del servidor (en Vercel: Settings → Environment Variables) y vuelve a desplegar:{" "}
+            <code>GEMINI_API_KEY</code>, <code>GROQ_API_KEY</code> u <code>OPENROUTER_API_KEY</code>. Instrucciones en Administración → Modelos.
           </p>
         </div>
       )}
@@ -99,10 +101,14 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <section className="card p-5 lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-medium">Gasto diario · últimos 30 días</h2>
+            <h2 className="font-medium">{anyCost ? "Gasto diario" : "Peticiones diarias"} · últimos 30 días</h2>
             <Link href="/usage" className="text-xs text-accent hover:underline">Ver detalle</Link>
           </div>
-          <DailyBars data={series} label={orgView ? "Toda la organización (USD)" : "Tu consumo (USD)"} />
+          <DailyBars
+            data={series}
+            metric={anyCost ? "usd" : "calls"}
+            label={`${orgView ? "Toda la organización" : "Tu consumo"} (${anyCost ? "USD" : "peticiones; todo gratuito"})`}
+          />
         </section>
 
         <section className="card p-5">
@@ -112,13 +118,13 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               const n = enabledModels.filter((m) => m.provider === p.id).length;
               return (
                 <li key={p.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span>{PROVIDER_LABELS[p.id as ProviderId]}</span>
+                  <span className="min-w-0 truncate">{PROVIDER_LABELS[p.id as ProviderId].split(" · ")[0]}</span>
                   {p.configured ? (
-                    <span className="flex items-center gap-1.5 text-ok">
-                      <span className="size-2 rounded-full bg-ok" /> Conectado · {n} modelos
+                    <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-ok">
+                      <span className="size-2 rounded-full bg-ok" /> Conectado · {n}
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1.5 text-muted">
+                    <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-muted">
                       <span className="size-2 rounded-full border border-muted" /> Sin clave
                     </span>
                   )}
@@ -138,10 +144,14 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </section>
 
         <section className="card p-5 lg:col-span-2">
-          <h2 className="mb-4 font-medium">Consumo por modelo · este mes</h2>
+          <h2 className="mb-4 font-medium">{anyCost ? "Gasto" : "Peticiones"} por modelo · este mes</h2>
           <ModelBars
-            format={formatUsd}
-            rows={models.map((m) => ({ label: m.label, provider: m.provider, value: m.cost, sub: `${m.calls} pet.` }))}
+            format={anyCost ? formatUsd : (v) => `${v} pet.`}
+            rows={models.map((m) =>
+              anyCost
+                ? { label: m.label, provider: m.provider, value: m.cost, sub: `${m.calls} pet.` }
+                : { label: m.label, provider: m.provider, value: m.calls, sub: "gratis" },
+            )}
           />
         </section>
 

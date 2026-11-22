@@ -1,13 +1,16 @@
 // TRAPERO AI — modelo de datos
-// Desarrollo con SQLite; para producción cambia provider a "postgresql".
+// PostgreSQL (Supabase en producción).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  /// Conexión agrupada (pooler de Supabase, puerto 6543) para la aplicación
+  url       = env("DATABASE_URL")
+  /// Conexión directa / de sesión (puerto 5432) para crear y migrar tablas
+  directUrl = env("DIRECT_URL")
 }
 
 // ─── Organización y acceso ────────────────────────────────────
@@ -72,7 +75,7 @@ model LoginAttempt {
 model AiModel {
   /// Identificador interno estable (p. ej. "claude-opus")
   id            String   @id
-  /// openai | anthropic | google
+  /// openai | anthropic | google | groq | openrouter
   provider      String
   /// Identificador del modelo en la API del proveedor
   apiModel      String
@@ -87,6 +90,10 @@ model AiModel {
   outputPrice   Float
   contextWindow Int
   enabled       Boolean  @default(true)
+  /// Se usa dentro del nivel gratuito del proveedor (coste 0)
+  free          Boolean  @default(false)
+  /// Admite imágenes
+  vision        Boolean  @default(false)
   /// Rol mínimo para usarlo: MEMBER | MANAGER | ADMIN
   minRole       String   @default("MEMBER")
   sortOrder     Int      @default(0)
@@ -127,6 +134,12 @@ model Message {
   costUsd        Float        @default(0)
   /// ok | error | stopped
   status         String       @default("ok")
+  /// answer | compare | review
+  kind           String       @default("answer")
+  /// En comparaciones: id del mensaje del usuario que agrupa las variantes
+  variantGroup   String?
+  /// En comparaciones: variante elegida para continuar la conversación
+  selected       Boolean      @default(true)
   createdAt      DateTime     @default(now())
 
   attachments    Attachment[]
@@ -181,7 +194,7 @@ model UsageRecord {
   /// ok | error
   status         String
   error          String?
-  /// chat | agent
+  /// chat | compare | review | agent
   source         String   @default("chat")
   createdAt      DateTime @default(now())
 

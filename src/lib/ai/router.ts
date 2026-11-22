@@ -1,111 +1,142 @@
-import type { AiModel } from "@prisma/client";
-
 /**
- * Selector automático de modelo.
- * Reglas explicables (se muestra el motivo al usuario) basadas en el contenido
- * de la petición. Solo elige entre modelos activos, permitidos para el rol y
- * cuyo proveedor tenga clave configurada.
+ * Selector inteligente de modelos.
+ *
+ * 1. Clasifica la petición (programación, análisis, redacción, datos, documento largo, consulta breve, general).
+ * 2. Descarta los modelos cuyo contexto no admite el tamaño de la conversación.
+ * 3. Puntúa cada candidato según sus capacidades, categoría, proveedor preferente y coste.
+ * El motivo de la elección se muestra al usuario.
+ *
+ * No depende de la base de datos: recibe los modelos disponibles (ya filtrados por rol,
+ * claves configuradas y modo de coste), lo que permite probarlo de forma aislada.
  */
+
+export type CostMode = "free_only" | "economic" | "quality";
+
+export interface RoutableModel {
+  id: string;
+  provider: string;
+  label: string;
+  tier: string;
+  strengths: string;
+  inputPrice: number;
+  outputPrice: number;
+  contextWindow: number;
+  free: boolean;
+  sortOrder: number;
+}
+
 export interface RouteInput {
   prompt: string;
   attachmentChars: number;
   historyChars: number;
 }
 
-export interface RouteDecision {
-  model: AiModel;
+export type TaskType = "long" | "code" | "deep" | "data" | "writing" | "quick" | "general";
+
+interface TaskProfile {
+  label: string;
+  strengths: string[];
+  tiers: string[];
+  providers: string[];
+}
+
+const TASKS: Record<TaskType, TaskProfile> = {
+  long: { label: "Documentación muy extensa", strengths: ["long-context"], tiers: ["advanced", "balanced", "fast"], providers: ["google", "anthropic", "openai"] },
+  code: { label: "Programación", strengths: ["code"], tiers: ["balanced", "advanced"], providers: ["anthropic", "openai", "groq", "openrouter", "google"] },
+  deep: { label: "Análisis complejo", strengths: ["reasoning", "analysis"], tiers: ["advanced", "balanced"], providers: ["anthropic", "openai", "google", "groq", "openrouter"] },
+  data: { label: "Análisis de datos y documentos", strengths: ["data", "long-context", "analysis"], tiers: ["advanced", "balanced"], providers: ["google", "anthropic", "openai", "groq"] },
+  writing: { label: "Redacción", strengths: ["writing"], tiers: ["balanced", "advanced", "fast"], providers: ["openai", "anthropic", "google", "groq", "openrouter"] },
+  quick: { label: "Consulta breve", strengths: ["fast", "general"], tiers: ["fast", "balanced"], providers: [] },
+  general: { label: "Consulta general", strengths: ["general"], tiers: ["balanced", "advanced", "fast"], providers: [] },
+};
+
+const CODE_RE =
+  /```|\b(c[oó]digo|programa(r|ci[oó]n)?|script|funci[oó]n|bug|depura|compila|python|javascript|typescript|java|sql|html|css|api|regex|refactoriza|deploy|docker|endpoint|backend|frontend|base de datos|consulta sql)\b/i;
+const DEEP_RE =
+  /\b(analiza|an[aá]lisis|estrategia|eval[uú]a|compara|riesgos?|contrato|jur[ií]dic\w*|legal|financier\w*|inversi[oó]n|rentabilidad|plan de negocio|due diligence|razona|demuestra|en profundidad|detallad\w*|auditor[ií]a|diagn[oó]stico)\b/i;
+const WRITING_RE =
+  /\b(redacta|escribe|email|correo|carta|art[ií]culo|post|copy|eslogan|traduce|resume|resumen|presentaci[oó]n|discurso|propuesta|informe)\b/i;
+const DATA_RE = /\b(excel|csv|tabla|datos|hoja de c[aá]lculo|m[eé]tricas|kpi|estad[ií]stic\w*|gr[aá]fico)\b/i;
+
+/** Estimación prudente de tokens a partir de caracteres (español ≈ 3,5 caracteres/token). */
+export function estimateTokens(chars: number) {
+  return Math.ceil(chars / 3.5);
+}
+
+export function classify(input: RouteInput): TaskType {
+  const p = input.prompt;
+  const total = input.attachmentChars + input.historyChars + p.length;
+  if (total > 400_000) return "long";
+  if (CODE_RE.test(p)) return "code";
+  if (DEEP_RE.test(p) || p.length > 2500) return "deep";
+  if (DATA_RE.test(p) && input.attachmentChars > 0) return "data";
+  if (input.attachmentChars > 0) return "data";
+  if (WRITING_RE.test(p)) return "writing";
+  if (p.length < 280) return "quick";
+  return "general";
+}
+
+function avgPrice(m: RoutableModel) {
+  return m.free ? 0 : (m.inputPrice + m.outputPrice * 3) / 4;
+}
+
+export function scoreModel(m: RoutableModel, task: TaskType, mode: CostMode) {
+  const t = TASKS[task];
+  const strengths = m.strengths.split(",").map((s) => s.trim());
+  let score = Math.min(3, t.strengths.filter((s) => strengths.includes(s)).length) * 10;
+  const ti = t.tiers.indexOf(m.tier);
+  if (ti !== -1) score += (t.tiers.length - ti) * 8;
+  const pi = t.providers.indexOf(m.provider);
+  if (pi !== -1) score += (t.providers.length - pi) * 3;
+  if (mode === "economic") score += m.free ? 25 : -Math.min(avgPrice(m), 20) * 2;
+  if (mode === "quality" && m.tier === "advanced" && task !== "quick") score += 6;
+  return score;
+}
+
+export interface RouteDecision<M extends RoutableModel> {
+  model: M;
+  task: TaskType;
   reason: string;
 }
 
-const CODE_RE =
-  /```|\b(c[oó]digo|programa|script|funci[oó]n|bug|error de compilaci|python|javascript|typescript|sql|api|regex|refactor|deploy|docker|clase|m[eé]todo)\b/i;
-const DEEP_RE =
-  /\b(analiza|an[aá]lisis|estrategia|eval[uú]a|compara|riesgo|contrato|jur[ií]dic|legal|financ|plan de negocio|due diligence|razona|demuestra|en profundidad|detallad)\w*/i;
-const WRITING_RE =
-  /\b(redacta|escribe|email|correo|carta|art[ií]culo|post|copy|eslogan|traduce|resume|resumen|presentaci[oó]n|discurso)\w*/i;
-const DATA_RE = /\b(excel|csv|tabla|datos|hoja de c[aá]lculo|m[eé]tricas|kpi|estad[ií]stic)\w*/i;
+export function routeModel<M extends RoutableModel>(input: RouteInput, available: M[], mode: CostMode): RouteDecision<M> | null {
+  if (available.length === 0) return null;
+  const task = classify(input);
+  const needed = estimateTokens(input.attachmentChars + input.historyChars + input.prompt.length) + 4000;
+  const fitting = available.filter((m) => m.contextWindow >= needed);
+  const pool = fitting.length > 0 ? fitting : available;
 
-function pick(models: AiModel[], provider: string | null, tiers: string[]): AiModel | undefined {
-  for (const tier of tiers) {
-    const m = models.find((x) => (provider ? x.provider === provider : true) && x.tier === tier);
-    if (m) return m;
-  }
-  return undefined;
+  const ranked = [...pool].sort((a, b) => scoreModel(b, task, mode) - scoreModel(a, task, mode) || a.sortOrder - b.sortOrder);
+  const model = ranked[0];
+  const parts = [`${TASKS[task].label}`];
+  if (fitting.length < available.length) parts.push(`se descartan modelos sin contexto para ~${Math.round(needed / 1000)}k tokens`);
+  if (mode === "free_only") parts.push("solo modelos gratuitos");
+  else if (mode === "economic") parts.push(model.free ? "opción gratuita priorizada" : "opción más económica adecuada");
+  if (fitting.length === 0) parts.push("aviso: la conversación puede superar el contexto del modelo");
+  return { model, task, reason: parts.join(" · ") };
 }
 
-export function routeModel(input: RouteInput, available: AiModel[]): RouteDecision | null {
-  if (available.length === 0) return null;
-  const sorted = [...available].sort((a, b) => a.sortOrder - b.sortOrder);
-  const p = input.prompt;
-  const totalChars = input.attachmentChars + input.historyChars + p.length;
+/** Ordena los candidatos para conmutar si el elegido falla: otro proveedor y, si es posible, misma categoría. */
+export function fallbackOrder<M extends RoutableModel>(failed: M, available: M[], tried: Set<string>): M[] {
+  return available
+    .filter((m) => !tried.has(m.id) && m.provider !== failed.provider)
+    .sort((a, b) => Number(b.tier === failed.tier) - Number(a.tier === failed.tier) || avgPrice(a) - avgPrice(b) || a.sortOrder - b.sortOrder);
+}
 
-  const choose = (
-    candidates: Array<[string | null, string[]]>,
-    reason: string,
-  ): RouteDecision | null => {
-    for (const [provider, tiers] of candidates) {
-      const m = pick(sorted, provider, tiers);
-      if (m) return { model: m, reason };
-    }
-    return null;
-  };
+/** Elige un revisor de otro proveedor para la «segunda opinión». */
+export function pickReviewer<M extends RoutableModel>(authorProvider: string, available: M[]): M | null {
+  const others = available.filter((m) => m.provider !== authorProvider);
+  const pool = others.length ? others : available;
+  if (!pool.length) return null;
+  return [...pool].sort((a, b) => scoreModel(b, "deep", "quality") + (b.strengths.includes("review") ? 10 : 0) - (scoreModel(a, "deep", "quality") + (a.strengths.includes("review") ? 10 : 0)) || a.sortOrder - b.sortOrder)[0];
+}
 
-  // 1. Documentos o contexto muy extensos → modelo de contexto largo
-  if (totalChars > 400_000) {
-    const d = choose(
-      [["google", ["advanced", "fast"]], ["anthropic", ["advanced", "balanced"]], [null, ["advanced", "balanced", "fast"]]],
-      "Contexto muy extenso: se usa un modelo especializado en documentos largos.",
-    );
-    if (d) return d;
-  }
-
-  // 2. Programación
-  if (CODE_RE.test(p)) {
-    const d = choose(
-      [["anthropic", ["balanced", "advanced"]], [null, ["balanced", "advanced"]]],
-      "Tarea de programación: se usa el modelo con mejor rendimiento en código.",
-    );
-    if (d) return d;
-  }
-
-  // 3. Análisis profundo / razonamiento
-  if (DEEP_RE.test(p) || p.length > 2500) {
-    const d = choose(
-      [["anthropic", ["advanced"]], [null, ["advanced"]], [null, ["balanced"]]],
-      "Análisis complejo: se usa un modelo de razonamiento avanzado.",
-    );
-    if (d) return d;
-  }
-
-  // 4. Datos y tablas con documentos
-  if (DATA_RE.test(p) && input.attachmentChars > 0) {
-    const d = choose(
-      [["google", ["advanced", "fast"]], [null, ["advanced", "balanced"]]],
-      "Análisis de datos sobre documentos adjuntos.",
-    );
-    if (d) return d;
-  }
-
-  // 5. Redacción
-  if (WRITING_RE.test(p)) {
-    const d = choose(
-      [["openai", ["advanced", "balanced"]], ["anthropic", ["balanced"]], [null, ["balanced", "advanced"]]],
-      "Tarea de redacción: se usa un modelo especializado en escritura.",
-    );
-    if (d) return d;
-  }
-
-  // 6. Consulta breve → modelo rápido y económico
-  if (p.length < 280 && input.attachmentChars === 0) {
-    const d = choose([[null, ["fast"]], [null, ["balanced"]]], "Consulta breve: se usa un modelo rápido y económico.");
-    if (d) return d;
-  }
-
-  // 7. Por defecto
-  return (
-    choose([[null, ["balanced"]], [null, ["advanced"]], [null, ["fast"]]], "Consulta general: modelo equilibrado.") ?? {
-      model: sorted[0],
-      reason: "Único modelo disponible.",
-    }
-  );
+/** Elige modelos de proveedores distintos para una comparación automática. */
+export function pickForComparison<M extends RoutableModel>(input: RouteInput, available: M[], mode: CostMode, count = 3): M[] {
+  const task = classify(input);
+  const ranked = [...available].sort((a, b) => scoreModel(b, task, mode) - scoreModel(a, task, mode) || a.sortOrder - b.sortOrder);
+  const out: M[] = [];
+  for (const m of ranked) if (!out.some((x) => x.provider === m.provider)) out.push(m);
+  for (const m of ranked) if (out.length < Math.min(count, available.length) && !out.includes(m)) out.push(m);
+  return out.slice(0, count);
 }

@@ -1,4 +1,5 @@
-export function costUsd(inputTokens: number, outputTokens: number, inputPrice: number, outputPrice: number) {
+export function costUsd(inputTokens: number, outputTokens: number, inputPrice: number, outputPrice: number, free = false) {
+  if (free) return 0;
   return (inputTokens * inputPrice + outputTokens * outputPrice) / 1_000_000;
 }
 

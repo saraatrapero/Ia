@@ -1,6 +1,6 @@
 import { ProviderDot } from "../provider-dot";
 
-const FILL: Record<string, string> = { openai: "bg-openai", anthropic: "bg-anthropic", google: "bg-google" };
+import { PROVIDER_FILL as FILL } from "../provider-dot";
 
 /** Barras horizontales por modelo, con etiqueta directa (el color identifica al proveedor). */
 export function ModelBars({

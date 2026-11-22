@@ -93,8 +93,8 @@ export default async function UsagePage({ searchParams }: { searchParams: Promis
 
       <div className="mt-6 grid gap-6 lg:grid-cols-5">
         <section className="card p-5 lg:col-span-3">
-          <h2 className="mb-4 font-medium">Coste diario</h2>
-          <DailyBars data={series} label="USD por día" />
+          <h2 className="mb-4 font-medium">{total > 0 ? "Coste diario" : "Peticiones diarias"}</h2>
+          <DailyBars data={series} metric={total > 0 ? "usd" : "calls"} label={total > 0 ? "USD por día" : "Peticiones por día (todas gratuitas)"} />
         </section>
         <section className="card p-5 lg:col-span-2">
           <h2 className="mb-4 font-medium">Por modelo</h2>

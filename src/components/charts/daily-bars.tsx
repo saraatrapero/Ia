@@ -5,13 +5,17 @@ import { formatUsd } from "@/lib/ai/pricing";
 
 /** Gráfico de barras diario (una serie) con tooltip al pasar el ratón o tocar. */
 export function DailyBars({
-  data,
+  data: raw,
   label,
+  metric = "usd",
 }: {
   data: { day: string; value: number; calls: number }[];
   label: string;
+  /** usd = coste diario · calls = número de peticiones */
+  metric?: "usd" | "calls";
 }) {
-  const format = formatUsd;
+  const data = metric === "calls" ? raw.map((d) => ({ ...d, value: d.calls })) : raw;
+  const format = metric === "calls" ? (v: number) => `${v} pet.` : formatUsd;
   const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(...data.map((d) => d.value), 0);
   const top = max > 0 ? max : 1;
@@ -23,8 +27,8 @@ export function DailyBars({
         <span>{label}</span>
         {h ? (
           <span className="text-ink">
-            {new Date(h.day).toLocaleDateString("es-ES", { day: "numeric", month: "short" })} · <b className="tabular-nums">{format(h.value)}</b> ·{" "}
-            {h.calls} peticiones
+            {new Date(h.day).toLocaleDateString("es-ES", { day: "numeric", month: "short" })} · <b className="tabular-nums">{format(h.value)}</b>
+            {metric === "usd" && <> · {h.calls} peticiones</>}
           </span>
         ) : (
           <span>máx. {format(max)}</span>

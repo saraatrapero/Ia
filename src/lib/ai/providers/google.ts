@@ -3,13 +3,29 @@ import { ProviderError, type ProviderAdapter } from "../types";
 
 let client: GoogleGenAI | null = null;
 function getClient() {
-  if (!client) client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  if (!client)
+    client = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      ...(process.env.GEMINI_BASE_URL ? { httpOptions: { baseUrl: process.env.GEMINI_BASE_URL } } : {}),
+    });
   return client;
 }
 
 export const googleAdapter: ProviderAdapter = {
   id: "google",
   isConfigured: () => Boolean(process.env.GEMINI_API_KEY),
+
+  async listModels() {
+    try {
+      const ids: string[] = [];
+      const pager = await getClient().models.list();
+      for await (const m of pager) if (m.name) ids.push(m.name.replace(/^models\//, ""));
+      return ids;
+    } catch (err) {
+      if (err instanceof ApiError) throw new ProviderError("google", `Error de Google (${err.status}): ${err.message}`);
+      throw err;
+    }
+  },
 
   async stream({ apiModel, system, messages, signal }, onText) {
     try {
@@ -40,7 +56,9 @@ export const googleAdapter: ProviderAdapter = {
       if (signal?.aborted) throw err;
       if (err instanceof ApiError) {
         if (err.status === 429)
-          throw new ProviderError("google", "Límite de peticiones de Google alcanzado. Inténtalo en unos segundos.", true);
+          throw new ProviderError("google", "Límite de uso de Gemini alcanzado (en el nivel gratuito es por minuto y por día). Prueba con otro modelo o espera.", true);
+        if (err.status === 404)
+          throw new ProviderError("google", "Google no reconoce el modelo. Revisa su identificador en Administración → Modelos.", true);
         if (err.status === 401 || err.status === 403)
           throw new ProviderError("google", "La clave de API de Gemini no es válida o no tiene permisos.");
         throw new ProviderError("google", `Error de Google (${err.status}): ${err.message}`, err.status >= 500);

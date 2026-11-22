@@ -16,11 +16,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         : await db.generatedFile.findFirst({ where: { id, userId: user.id } });
     if (!rec) throw new HttpError(404, "Archivo no encontrado.");
     const data = await readStored(rec.storagePath);
+    const ascii = rec.filename
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\x20-\x7e]/g, "_")
+      .replace(/["\\]/g, "_");
     return new Response(new Uint8Array(data), {
       headers: {
         "Content-Type": rec.mimeType,
         "Content-Length": String(data.length),
-        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(rec.filename)}`,
+        "Content-Disposition": `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(rec.filename)}`,
         "Cache-Control": "private, no-store",
       },
     });

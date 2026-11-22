@@ -16,7 +16,7 @@ function CodeBlock({ lang, code, onDownload }: { lang: string; code: string; onD
   const [copied, setCopied] = useState(false);
   const ext = EXT_BY_LANG[lang.toLowerCase()] ?? "txt";
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-[#0a0e15]">
+    <div className="overflow-hidden rounded-lg border border-line bg-code">
       <div className="flex items-center justify-between border-b border-line px-3 py-1.5 text-xs text-muted">
         <span className="font-mono">{lang || "texto"}</span>
         <div className="flex items-center gap-1">

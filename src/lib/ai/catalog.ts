@@ -1,13 +1,15 @@
 /**
- * Catálogo inicial de modelos. Se copia a la base de datos con el seed y
- * después se gestiona desde Administración → Modelos (activar, precios, ids).
+ * Catálogo inicial de modelos. Se copia a la base de datos al instalar y después se
+ * gestiona desde Administración → Modelos (activar, precios, identificadores, gratuito).
  *
- * Precios en USD por millón de tokens. Los de Anthropic son tarifas oficiales;
- * los de OpenAI y Google son orientativos y deben verificarse en la web del
- * proveedor antes de usarlos para facturación interna.
+ * Precios en USD por millón de tokens. Los de Anthropic son tarifas oficiales; el resto
+ * son orientativos. Los identificadores de proveedores gratuitos cambian con frecuencia:
+ * usa «Comprobar proveedores» en el panel para verificar cuáles existen hoy.
  */
-export type ProviderId = "openai" | "anthropic" | "google";
+export type ProviderId = "openai" | "anthropic" | "google" | "groq" | "openrouter";
 export type Tier = "fast" | "balanced" | "advanced";
+
+export const PROVIDER_IDS: ProviderId[] = ["google", "groq", "openrouter", "anthropic", "openai"];
 
 export interface CatalogModel {
   id: string;
@@ -20,10 +22,80 @@ export interface CatalogModel {
   inputPrice: number;
   outputPrice: number;
   contextWindow: number;
+  free?: boolean;
+  vision?: boolean;
   minRole?: "MEMBER" | "MANAGER" | "ADMIN";
 }
 
 export const DEFAULT_MODELS: CatalogModel[] = [
+  // ── Gratuitos ───────────────────────────────────────────────
+  {
+    id: "gemini-flash",
+    provider: "google",
+    apiModel: "gemini-3.8-flash",
+    label: "Gemini 3.8 Flash",
+    description: "Gratuito (nivel sin coste de Google). Rápido, contexto muy amplio y documentos largos.",
+    tier: "balanced",
+    strengths: ["general", "long-context", "data", "writing", "fast"],
+    inputPrice: 0.3,
+    outputPrice: 2.5,
+    contextWindow: 1_000_000,
+    free: true,
+    vision: true,
+  },
+  {
+    id: "groq-gpt-oss",
+    provider: "groq",
+    apiModel: "openai/gpt-oss-120b",
+    label: "GPT-OSS 120B (Groq)",
+    description: "Gratuito con límites en Groq. Modelo abierto de OpenAI con buen razonamiento y programación; muy rápido.",
+    tier: "advanced",
+    strengths: ["reasoning", "code", "analysis"],
+    inputPrice: 0.15,
+    outputPrice: 0.6,
+    contextWindow: 128_000,
+    free: true,
+  },
+  {
+    id: "groq-llama",
+    provider: "groq",
+    apiModel: "llama-3.3-70b-versatile",
+    label: "Llama 3.3 70B (Groq)",
+    description: "Gratuito con límites en Groq. Respuestas casi instantáneas para consultas generales.",
+    tier: "fast",
+    strengths: ["general", "fast", "writing"],
+    inputPrice: 0.59,
+    outputPrice: 0.79,
+    contextWindow: 128_000,
+    free: true,
+  },
+  {
+    id: "openrouter-free",
+    provider: "openrouter",
+    apiModel: "deepseek/deepseek-chat-v3.1:free",
+    label: "DeepSeek (OpenRouter, gratis)",
+    description: "Modelo gratuito vía OpenRouter (los modelos «:free» tienen límites diarios y pueden registrar las peticiones).",
+    tier: "advanced",
+    strengths: ["code", "reasoning", "analysis"],
+    inputPrice: 0,
+    outputPrice: 0,
+    contextWindow: 128_000,
+    free: true,
+  },
+  // ── De pago (se activan al configurar la clave) ─────────────
+  {
+    id: "gemini-pro",
+    provider: "google",
+    apiModel: "gemini-3.1-pro-preview",
+    label: "Gemini 3.1 Pro",
+    description: "Documentos muy largos, datos y análisis multimodal.",
+    tier: "advanced",
+    strengths: ["long-context", "analysis", "data", "reasoning"],
+    inputPrice: 2,
+    outputPrice: 12,
+    contextWindow: 1_000_000,
+    vision: true,
+  },
   {
     id: "claude-opus",
     provider: "anthropic",
@@ -31,10 +103,11 @@ export const DEFAULT_MODELS: CatalogModel[] = [
     label: "Claude Opus 5.5",
     description: "Razonamiento profundo, análisis complejos, estrategia y programación exigente.",
     tier: "advanced",
-    strengths: ["analysis", "code", "reasoning", "long-context"],
+    strengths: ["analysis", "code", "reasoning", "long-context", "review"],
     inputPrice: 4,
     outputPrice: 20,
     contextWindow: 1_000_000,
+    vision: true,
   },
   {
     id: "claude-sonnet",
@@ -43,10 +116,11 @@ export const DEFAULT_MODELS: CatalogModel[] = [
     label: "Claude Sonnet 5.5",
     description: "Equilibrio entre velocidad y capacidad. Muy bueno en programación y redacción.",
     tier: "balanced",
-    strengths: ["code", "writing", "analysis"],
+    strengths: ["code", "writing", "analysis", "review"],
     inputPrice: 2,
     outputPrice: 10,
     contextWindow: 1_000_000,
+    vision: true,
   },
   {
     id: "claude-haiku",
@@ -59,6 +133,7 @@ export const DEFAULT_MODELS: CatalogModel[] = [
     inputPrice: 0.1,
     outputPrice: 0.5,
     contextWindow: 1_000_000,
+    vision: true,
   },
   {
     id: "gpt-advanced",
@@ -71,6 +146,7 @@ export const DEFAULT_MODELS: CatalogModel[] = [
     inputPrice: 5,
     outputPrice: 20,
     contextWindow: 400_000,
+    vision: true,
   },
   {
     id: "gpt-fast",
@@ -79,41 +155,37 @@ export const DEFAULT_MODELS: CatalogModel[] = [
     label: "GPT-5.4 mini",
     description: "Modelo rápido y económico de OpenAI.",
     tier: "fast",
-    strengths: ["general", "fast"],
+    strengths: ["general", "fast", "writing"],
     inputPrice: 0.4,
     outputPrice: 1.6,
     contextWindow: 400_000,
-  },
-  {
-    id: "gemini-pro",
-    provider: "google",
-    apiModel: "gemini-3.1-pro-preview",
-    label: "Gemini 3.1 Pro",
-    description: "Documentos muy largos, datos y análisis multimodal.",
-    tier: "advanced",
-    strengths: ["long-context", "analysis", "data"],
-    inputPrice: 2,
-    outputPrice: 12,
-    contextWindow: 1_000_000,
-  },
-  {
-    id: "gemini-flash",
-    provider: "google",
-    apiModel: "gemini-3.8-flash",
-    label: "Gemini 3.8 Flash",
-    description: "Rápido y barato, con contexto muy amplio.",
-    tier: "fast",
-    strengths: ["fast", "long-context", "general"],
-    inputPrice: 0.3,
-    outputPrice: 2.5,
-    contextWindow: 1_000_000,
+    vision: true,
   },
 ];
 
 export const PROVIDER_LABELS: Record<ProviderId, string> = {
-  openai: "OpenAI · GPT",
-  anthropic: "Anthropic · Claude",
   google: "Google · Gemini",
+  groq: "Groq · modelos abiertos",
+  openrouter: "OpenRouter · modelos gratuitos",
+  anthropic: "Anthropic · Claude",
+  openai: "OpenAI · GPT",
+};
+
+export const PROVIDER_ENV: Record<ProviderId, string> = {
+  google: "GEMINI_API_KEY",
+  groq: "GROQ_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+};
+
+/** Dónde conseguir cada clave */
+export const PROVIDER_SIGNUP: Record<ProviderId, { url: string; free: boolean }> = {
+  google: { url: "https://aistudio.google.com/apikey", free: true },
+  groq: { url: "https://console.groq.com/keys", free: true },
+  openrouter: { url: "https://openrouter.ai/settings/keys", free: true },
+  anthropic: { url: "https://console.anthropic.com/settings/keys", free: false },
+  openai: { url: "https://platform.openai.com/api-keys", free: false },
 };
 
 export const TIER_LABELS: Record<Tier, string> = {

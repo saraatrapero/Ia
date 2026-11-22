@@ -140,14 +140,50 @@ export async function updateModelAction(_p: FormState, form: FormData): Promise<
       outputPrice: z.coerce.number().min(0),
       minRole: z.enum(ROLES),
       enabled: z.string().optional(),
+      free: z.string().optional(),
     })
     .safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Datos no válidos." };
-  const { id, enabled, ...rest } = parsed.data;
-  await db.aiModel.update({ where: { id }, data: { ...rest, enabled: enabled === "on" } });
-  await audit(me.id, "model.updated", { target: id, details: { ...rest, enabled: enabled === "on" } });
+  const { id, enabled, free, ...rest } = parsed.data;
+  const data = { ...rest, enabled: enabled === "on", free: free === "on" };
+  await db.aiModel.update({ where: { id }, data });
+  await audit(me.id, "model.updated", { target: id, details: data });
   revalidatePath("/admin/models");
   return { ok: "Modelo actualizado." };
+}
+
+export type ProviderCheck = {
+  provider: string;
+  configured: boolean;
+  ok: boolean;
+  error?: string;
+  total?: number;
+  models: { id: string; label: string; apiModel: string; found: boolean }[];
+};
+
+/** Consulta a cada proveedor configurado qué modelos existen y los compara con el catálogo. */
+export async function checkProvidersAction(): Promise<{ error?: string; results?: ProviderCheck[] }> {
+  const me = await admin("models.manage");
+  if (!me) return { error: "No tienes permiso." };
+  const { PROVIDERS } = await import("@/lib/ai/providers");
+  const { PROVIDER_IDS } = await import("@/lib/ai/catalog");
+  const catalog = await db.aiModel.findMany({ orderBy: { sortOrder: "asc" } });
+  const results = await Promise.all(
+    PROVIDER_IDS.map(async (provider): Promise<ProviderCheck> => {
+      const adapter = PROVIDERS[provider];
+      const mine = catalog.filter((m) => m.provider === provider);
+      const base = { provider, configured: adapter.isConfigured(), models: mine.map((m) => ({ id: m.id, label: m.label, apiModel: m.apiModel, found: false })) };
+      if (!base.configured) return { ...base, ok: false };
+      try {
+        const ids = new Set(await adapter.listModels());
+        return { ...base, ok: true, total: ids.size, models: base.models.map((m) => ({ ...m, found: ids.has(m.apiModel) })) };
+      } catch (e) {
+        return { ...base, ok: false, error: e instanceof Error ? e.message : "Error desconocido" };
+      }
+    }),
+  );
+  await audit(me.id, "model.updated", { details: { action: "check_providers" } });
+  return { results };
 }
 
 export async function updateSettingsAction(_p: FormState, form: FormData): Promise<FormState> {
@@ -160,6 +196,7 @@ export async function updateSettingsAction(_p: FormState, form: FormData): Promi
     if (raw === null) continue;
     const value = String(raw).trim();
     if (numeric.includes(key) && !(Number(value) > 0)) return { error: `Valor no válido para ${key}.` };
+    if (key === "cost_mode" && !["free_only", "economic", "quality"].includes(value)) return { error: "Modo de coste no válido." };
     if ((key === "default_user_budget_usd" || key === "global_monthly_budget_usd") && value !== "" && !(Number(value.replace(",", ".")) >= 0))
       return { error: "Presupuesto no válido." };
     if (key === "allowed_extensions") {

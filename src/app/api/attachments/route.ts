@@ -3,7 +3,7 @@ import { apiUser, clientInfo, errorResponse, HttpError } from "@/lib/auth/sessio
 import { db } from "@/lib/db";
 import { extractText, MIME_BY_EXT } from "@/lib/files/extract";
 import { extOf, sanitizeFilename, saveFile } from "@/lib/files/storage";
-import { rateLimit } from "@/lib/rate-limit";
+import { withinUploadLimit } from "@/lib/rate-limit";
 import { getSettings, num } from "@/lib/settings";
 
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ const MAX_DOC_CHARS = 1_500_000;
 export async function POST(req: Request) {
   try {
     const user = await apiUser("files.upload");
-    if (!rateLimit(`upload:${user.id}`, 30)) throw new HttpError(429, "Demasiadas subidas seguidas.");
+    if (!(await withinUploadLimit(user.id))) throw new HttpError(429, "Demasiadas subidas seguidas.");
     const settings = await getSettings();
     const maxMb = num(settings.max_upload_mb) ?? 25;
     const allowed = settings.allowed_extensions.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     if (text.length > MAX_DOC_CHARS)
       throw new HttpError(413, `El documento es demasiado extenso (${text.length.toLocaleString("es-ES")} caracteres; máximo ${MAX_DOC_CHARS.toLocaleString("es-ES")}). Divídelo en partes.`);
 
-    const storagePath = await saveFile("uploads", buf, ext);
+    const storagePath = await saveFile("uploads", buf, ext, MIME_BY_EXT[ext]);
     const att = await db.attachment.create({
       data: {
         userId: user.id,

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logoutAction } from "@/app/actions/auth";
+import { ThemeToggle } from "./theme-toggle";
 import {
   IconBot, IconChart, IconChat, IconChip, IconClose, IconFile, IconLogout, IconMenu,
   IconPanel, IconPlus, IconSearch, IconSettings, IconShield, IconUsers,
@@ -116,6 +117,7 @@ export function Shell({
               <p className="truncate text-sm font-medium">{user.name}</p>
               <p className="truncate text-xs text-muted">{user.role}</p>
             </div>
+            <ThemeToggle />
             <Link href="/settings" className="rounded-md p-1.5 text-muted hover:bg-panel-2 hover:text-ink" title="Ajustes de cuenta">
               <IconSettings width={16} height={16} />
             </Link>

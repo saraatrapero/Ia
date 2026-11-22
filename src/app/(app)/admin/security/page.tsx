@@ -63,6 +63,8 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
               <li>✓ Cada usuario solo accede a sus conversaciones y archivos</li>
               <li>✓ Límite de peticiones por minuto y presupuestos de gasto</li>
               <li>✓ Agentes sin capacidad de ejecución sobre sistemas reales</li>
+              <li>✓ Defensa básica frente a inyección de instrucciones en documentos</li>
+              <li className="text-warn">✗ Doble factor (previsto en la fase 6)</li>
             </ul>
           </div>
           <div className="card overflow-x-auto p-5">

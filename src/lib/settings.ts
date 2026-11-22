@@ -1,8 +1,9 @@
 import { db } from "./db";
 
 export const SETTING_DEFAULTS = {
+  cost_mode: "free_only",
   session_hours: "12",
-  max_upload_mb: "25",
+  max_upload_mb: "4",
   allowed_extensions: "pdf,docx,xlsx,csv,txt,md,json",
   default_user_budget_usd: "50",
   global_monthly_budget_usd: "",
@@ -14,8 +15,12 @@ export const SETTING_DEFAULTS = {
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
 
 export const SETTING_LABELS: Record<SettingKey, { label: string; help: string }> = {
+  cost_mode: {
+    label: "Modo de coste",
+    help: "free_only = solo modelos gratuitos (coste 0) · economic = prioriza gratuitos y baratos · quality = prioriza la calidad.",
+  },
   session_hours: { label: "Duración de la sesión (horas)", help: "Tras este tiempo hay que volver a iniciar sesión." },
-  max_upload_mb: { label: "Tamaño máximo de archivo (MB)", help: "Límite por documento adjunto." },
+  max_upload_mb: { label: "Tamaño máximo de archivo (MB)", help: "Límite por documento. En el plan gratuito de Vercel no puede superar 4 MB (límite de 4,5 MB por petición)." },
   allowed_extensions: { label: "Extensiones permitidas", help: "Separadas por comas." },
   default_user_budget_usd: { label: "Presupuesto mensual por defecto por usuario (USD)", help: "Vacío = sin límite. Se puede ajustar por usuario." },
   global_monthly_budget_usd: { label: "Presupuesto mensual global (USD)", help: "Vacío = sin límite. Bloquea nuevas peticiones al alcanzarse." },

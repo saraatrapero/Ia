@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       } catch (e) {
         throw new HttpError(422, e instanceof Error ? e.message : "No se pudo generar el archivo.");
       }
-      filename = sanitizeFilename(`${msg.conversation.title.slice(0, 60)}.${fmt}`);
+      filename = sanitizeFilename(`${msg.conversation.title.replace(/[¿?¡!]/g, "").trim().slice(0, 60) || "respuesta"}.${fmt}`);
       mime = EXPORT_FORMATS[fmt].mime;
     } else {
       if (!msg.content.includes(body.code.slice(0, 200))) throw new HttpError(400, "El código no pertenece a este mensaje.");
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     }
 
     const ext = filename.split(".").pop() ?? "txt";
-    const storagePath = await saveFile("generated", data, ext);
+    const storagePath = await saveFile("generated", data, ext, mime);
     const file = await db.generatedFile.create({
       data: { userId: user.id, messageId: msg.id, filename, mimeType: mime, size: data.length, storagePath },
     });

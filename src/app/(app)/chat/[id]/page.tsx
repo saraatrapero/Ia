@@ -15,7 +15,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   return (
     <ChatView
       key={conv.id}
-      models={await modelOptions(user.role)}
+      {...await modelOptions(user.role)}
       initial={conv}
       userName={user.name.split(" ")[0]}
       allowedExtensions={settings.allowed_extensions}

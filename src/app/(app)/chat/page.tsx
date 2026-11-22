@@ -11,7 +11,7 @@ export default async function NewChatPage() {
   return (
     <ChatView
       key="new"
-      models={await modelOptions(user.role)}
+      {...await modelOptions(user.role)}
       initial={{ id: null, title: "Nueva conversación", modelMode: "auto", messages: [] }}
       userName={user.name.split(" ")[0]}
       allowedExtensions={settings.allowed_extensions}

@@ -24,6 +24,8 @@ export interface ProviderAdapter {
   isConfigured(): boolean;
   /** Emite fragmentos de texto vía onText y devuelve el consumo al terminar. */
   stream(req: StreamRequest, onText: (text: string) => void): Promise<StreamResult>;
+  /** Identificadores de modelo que la clave configurada puede usar (para verificar el catálogo). */
+  listModels(): Promise<string[]>;
 }
 
 export class ProviderError extends Error {
