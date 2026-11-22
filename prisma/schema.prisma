@@ -1,0 +1,269 @@
+// TRAPERO AI — modelo de datos
+// PostgreSQL (Supabase en producción).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  /// Conexión agrupada (pooler de Supabase, puerto 6543) para la aplicación
+  url       = env("DATABASE_URL")
+  /// Conexión directa / de sesión (puerto 5432) para crear y migrar tablas
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Organización y acceso ────────────────────────────────────
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  users     User[]
+}
+
+model User {
+  id               String      @id @default(cuid())
+  email            String      @unique
+  name             String
+  passwordHash     String
+  /// ADMIN | MANAGER | MEMBER
+  role             String      @default("MEMBER")
+  active           Boolean     @default(true)
+  mustChangePassword Boolean   @default(false)
+  /// Límite mensual de gasto en USD (null = sin límite propio)
+  monthlyBudgetUsd Float?
+  departmentId     String?
+  department       Department? @relation(fields: [departmentId], references: [id])
+  createdAt        DateTime    @default(now())
+  lastLoginAt      DateTime?
+
+  sessions       Session[]
+  conversations  Conversation[]
+  attachments    Attachment[]
+  generatedFiles GeneratedFile[]
+  usage          UsageRecord[]
+  auditLogs      AuditLog[]
+  agents         Agent[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+}
+
+// ─── Modelos de IA ────────────────────────────────────────────
+
+model AiModel {
+  /// Identificador interno estable (p. ej. "claude-opus")
+  id            String   @id
+  /// openai | anthropic | google | groq | openrouter
+  provider      String
+  /// Identificador del modelo en la API del proveedor
+  apiModel      String
+  label         String
+  description   String
+  /// fast | balanced | advanced
+  tier          String
+  /// Etiquetas separadas por comas: code, analysis, writing, long-context, general
+  strengths     String
+  /// Precio USD por millón de tokens
+  inputPrice    Float
+  outputPrice   Float
+  contextWindow Int
+  enabled       Boolean  @default(true)
+  /// Se usa dentro del nivel gratuito del proveedor (coste 0)
+  free          Boolean  @default(false)
+  /// Admite imágenes
+  vision        Boolean  @default(false)
+  /// Rol mínimo para usarlo: MEMBER | MANAGER | ADMIN
+  minRole       String   @default("MEMBER")
+  sortOrder     Int      @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
+// ─── Conversaciones ───────────────────────────────────────────
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String   @default("Nueva conversación")
+  /// "auto" o id de AiModel
+  modelMode String   @default("auto")
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages    Message[]
+  attachments Attachment[]
+
+  @@index([userId, updatedAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// user | assistant
+  role           String
+  content        String
+  modelId        String?
+  provider       String?
+  routingReason  String?
+  inputTokens    Int          @default(0)
+  outputTokens   Int          @default(0)
+  costUsd        Float        @default(0)
+  /// ok | error | stopped
+  status         String       @default("ok")
+  /// answer | compare | review
+  kind           String       @default("answer")
+  /// En comparaciones: id del mensaje del usuario que agrupa las variantes
+  variantGroup   String?
+  /// En comparaciones: variante elegida para continuar la conversación
+  selected       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+
+  attachments    Attachment[]
+  generatedFiles GeneratedFile[]
+
+  @@index([conversationId, createdAt])
+}
+
+model Attachment {
+  id             String        @id @default(cuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messageId      String?
+  message        Message?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  filename       String
+  mimeType       String
+  size           Int
+  storagePath    String
+  extractedText  String
+  charCount      Int
+  createdAt      DateTime      @default(now())
+}
+
+model GeneratedFile {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messageId   String?
+  message     Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  filename    String
+  mimeType    String
+  size        Int
+  storagePath String
+  createdAt   DateTime @default(now())
+}
+
+// ─── Consumo y auditoría ──────────────────────────────────────
+
+model UsageRecord {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String?
+  modelId        String
+  provider       String
+  inputTokens    Int
+  outputTokens   Int
+  costUsd        Float
+  latencyMs      Int
+  /// ok | error
+  status         String
+  error          String?
+  /// chat | compare | review | agent
+  source         String   @default("chat")
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  target    String?
+  details   String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Agentes y programación (estructura; ejecución desactivada) ──
+
+model Agent {
+  id              String   @id @default(cuid())
+  name            String
+  description     String
+  systemPrompt    String
+  modelId         String
+  /// read | draft | execute
+  permissionLevel String   @default("read")
+  /// Herramientas permitidas, separadas por comas
+  tools           String   @default("")
+  enabled         Boolean  @default(false)
+  createdById     String
+  createdBy       User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  schedules ScheduledTask[]
+  runs      AgentRun[]
+}
+
+model ScheduledTask {
+  id        String    @id @default(cuid())
+  agentId   String
+  agent     Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  name      String
+  /// Expresión cron de 5 campos
+  cron      String
+  prompt    String
+  enabled   Boolean   @default(false)
+  lastRunAt DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model AgentRun {
+  id         String    @id @default(cuid())
+  agentId    String
+  agent      Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  /// pending | running | done | error | blocked
+  status     String
+  input      String
+  output     String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+}
