@@ -1,6 +1,5 @@
 import hashlib
 import hmac
-import io
 import os
 import secrets
 from pathlib import Path

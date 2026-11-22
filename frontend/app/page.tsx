@@ -8,7 +8,9 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const navigation = [["⌂","Inicio"],["◇","Conversaciones"],["⌘","Desarrollo"],["▦","Mis proyectos"],["▧","Documentos"],["◎","Investigación"],["✦","Agentes IA"],["↻","Automatizaciones"],["◉","Memoria"],["€","Consumo"]];
 
 export default function Home() {
-  const [token, setToken] = useState("");
+  const [token, setToken] = useState(() =>
+    typeof window === "undefined" ? "" : localStorage.getItem("trapero_token") || ""
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [provider, setProvider] = useState("auto");
@@ -20,7 +22,6 @@ export default function Home() {
   const [dark, setDark] = useState(true);
   const [dashboard, setDashboard] = useState({ conversations: 0, input_tokens: 0, output_tokens: 0, estimated_cost: 0 });
 
-  useEffect(() => setToken(localStorage.getItem("trapero_token") || ""), []);
   useEffect(() => {
     if (!token) return;
     fetch(`${API}/api/dashboard`, { headers: { Authorization: "Bearer " + token } })
