@@ -1,28 +1,68 @@
 # Puesta en producción paso a paso (coste 0, solo navegador)
 
-Tiempo estimado: 30-40 minutos. No hace falta instalar nada en tu ordenador.
+Tiempo estimado: **10-15 minutos**. No hace falta instalar nada en tu ordenador.
 
 Al terminar tendrás TRAPERO AI funcionando en una dirección `https://….vercel.app` con:
 - **Vercel** (gratis): aloja la aplicación.
-- **Supabase** (gratis): base de datos y archivos.
-- **Gemini, Groq y OpenRouter** (gratis): modelos de IA.
+- **Supabase** (gratis): base de datos y archivos. **Vercel lo crea y lo conecta solo.**
+- **Gemini** (gratis), y opcionalmente **Groq** y **OpenRouter** (gratis): modelos de IA.
 
-> ⚠ **Antes de empezar, lee esto:** el plan gratuito de Vercel es para uso personal no comercial, y los niveles gratuitos de Gemini y OpenRouter pueden usar o registrar lo que les envías. No envíes datos personales ni confidenciales a los modelos gratuitos. Más detalle en `AUDITORIA.md`.
+> ⚠ **Antes de empezar:** el plan gratuito de Vercel es para uso personal no comercial, y los niveles gratuitos de Gemini y OpenRouter pueden usar o registrar lo que les envías. No envíes datos personales ni confidenciales a los modelos gratuitos. Más detalle en `AUDITORIA.md`.
 
-Durante el proceso irás copiando valores. Ábrete una nota de texto para pegarlos ahí temporalmente y **bórrala al final**: son secretos.
+El código ya está en la rama `main` del repositorio: no tienes que hacer nada en GitHub.
+
+## Camino rápido (recomendado)
+
+### 1. Clave gratuita de Gemini (2 minutos)
+
+1. Abre **https://aistudio.google.com/apikey** e inicia sesión con tu cuenta de Google.
+2. Pulsa **Create API key** y cópiala.
+
+(Opcional, para tener más modelos gratis: **https://console.groq.com/keys** → *Create API Key*, y **https://openrouter.ai/settings/keys** → *Create API Key*.)
+
+### 2. Publicar en Vercel (5 minutos)
+
+1. Abre **https://vercel.com/signup** → **Continue with GitHub** → plan **Hobby**.
+2. **Add New… → Project** → junto a `ia` pulsa **Import**. (Si no aparece: *Adjust GitHub App Permissions* y da acceso al repositorio `ia`.)
+3. Abre **Environment Variables** y añade:
+
+   | Key | Value |
+   |---|---|
+   | `SETUP_CODE` | Un código que inventes, de al menos 12 caracteres. Te lo pedirá la web para crear tu cuenta |
+   | `GEMINI_API_KEY` | La clave del paso 1 |
+   | `GROQ_API_KEY` | (opcional) |
+   | `OPENROUTER_API_KEY` | (opcional) |
+
+4. Pulsa **Deploy**. Tarda 2-3 minutos.
+5. ✅ Al abrir la web verás **«Configuración pendiente»** pidiendo la base de datos. Es lo esperado.
+
+### 3. Conectar Supabase desde Vercel (3 minutos)
+
+1. En tu proyecto de Vercel, pestaña **Storage** → **Create Database** → elige **Supabase** → **Continue**.
+2. Acepta las condiciones, elige una región de Europa (por ejemplo *Frankfurt*) y el plan **Free** → **Create**.
+3. En la pantalla de conexión deja marcados todos los entornos y pulsa **Connect**.
+4. Pestaña **Deployments** → en el primero, **⋯ → Redeploy** → **Redeploy**.
+
+Vercel añade solas todas las variables de Supabase. TRAPERO AI las usa para la base de datos, los archivos y para firmar las sesiones: no tienes que copiar nada.
+
+### 4. Crear tu cuenta y comprobar
+
+1. Abre la dirección de tu proyecto. Aparecerá **Instalación de TRAPERO AI**.
+2. Escribe tu `SETUP_CODE`, tu nombre, tu correo y una contraseña (mínimo 10 caracteres con letras y números) → **Crear administrador**.
+3. **Modelos y proveedores** → **Comprobar ahora**. Si algún modelo aparece con ✗, cambia su **ID en la API** por uno de la lista del proveedor y pulsa **Guardar**.
+4. **Nueva conversación** → «Hola» → responde un modelo con la etiqueta «gratis».
+5. Adjunta un documento pequeño y pregunta por él (confirma que los archivos se guardan).
+6. **Consumo y costes**: 0,00 $.
+
+Si algo falla, la propia web te dirá qué falta; si no, anota el mensaje exacto.
 
 ---
 
-## Paso 0 — Pasar el código a la rama principal
+## Alternativa: usar tu cuenta de Supabase existente
 
-El código está en la rama `claude/cool-mccarthy-7zyt0v`. Vercel publica la rama `main`.
+Si prefieres no crear Supabase desde Vercel, sigue estos pasos en lugar del paso 3 anterior.
 
-1. Abre **https://github.com/saraatrapero/ia**.
-2. Si aparece un aviso amarillo con el botón **Compare & pull request**, púlsalo. Si no aparece: pestaña **Pull requests** → **New pull request** → en *compare* elige `claude/cool-mccarthy-7zyt0v`.
-3. Pulsa **Create pull request** y después **Merge pull request** → **Confirm merge**.
-4. ✅ Comprobación: en la página principal del repositorio ves las carpetas `src`, `prisma` y `docs`.
-
-## Paso 1 — Supabase: base de datos
+### A. Supabase: base de datos
 
 1. Entra en **https://supabase.com/dashboard** → **New project**.
 2. Rellena:
@@ -35,33 +75,14 @@ El código está en la rama `claude/cool-mccarthy-7zyt0v`. Vercel publica la ram
    - Copia la de **Session pooler** (contiene `:5432`), sustituye `[YOUR-PASSWORD]`. Esta es tu **DIRECT_URL**.
 5. ✅ Comprobación: ambas empiezan por `postgresql://postgres.` y contienen `pooler.supabase.com`.
 
-## Paso 2 — Supabase: claves para los archivos
+### B. Supabase: claves para los archivos
 
 1. En el menú izquierdo: **Project Settings** (rueda dentada) → **Data API** (o **API**): copia la **Project URL** (`https://xxxx.supabase.co`) → es tu **SUPABASE_URL**.
 2. **Project Settings → API Keys**: abre la pestaña **Legacy API Keys** y copia la clave **service_role** (pulsa *Reveal*) → es tu **SUPABASE_SERVICE_ROLE_KEY**.
    - Esta clave da acceso total a tu proyecto: no la compartas ni la pegues en ningún otro sitio.
 3. No hace falta crear el «bucket» de archivos: TRAPERO AI lo crea solo (privado) la primera vez que subas un documento.
 
-## Paso 3 — Claves de IA gratuitas
-
-Consigue al menos una; lo ideal son las tres.
-
-| Proveedor | Página | Qué pulsar | Variable |
-|---|---|---|---|
-| Google Gemini | https://aistudio.google.com/apikey | **Create API key** | `GEMINI_API_KEY` |
-| Groq | https://console.groq.com/keys | **Create API Key** | `GROQ_API_KEY` |
-| OpenRouter | https://openrouter.ai/settings/keys | **Create API Key** (sin añadir crédito) | `OPENROUTER_API_KEY` |
-
-✅ Comprobación: tienes en tu nota entre una y tres claves.
-
-## Paso 4 — Dos secretos propios
-
-Inventa (o genera con un gestor de contraseñas) dos textos aleatorios:
-
-- **AUTH_SECRET**: al menos 40 caracteres aleatorios (letras y números). Firma las sesiones.
-- **SETUP_CODE**: al menos 12 caracteres. Lo pedirá la página de instalación para crear tu cuenta.
-
-## Paso 5 — Vercel: publicar la aplicación
+### C. Variables en Vercel
 
 1. Entra en **https://vercel.com/signup** → **Continue with GitHub** (plan **Hobby**).
 2. **Add New… → Project** → busca `ia` → **Import**. Si no aparece, pulsa *Adjust GitHub App Permissions* y da acceso al repositorio.
@@ -85,21 +106,9 @@ Inventa (o genera con un gestor de contraseñas) dos textos aleatorios:
 4. Pulsa **Deploy** y espera 2-4 minutos. Durante la compilación se crean las tablas en Supabase.
 5. ✅ Comprobación: aparece «Congratulations!» con una vista previa. Si sale un error, abre **Build Logs** y copia las últimas líneas para revisarlas.
 
-## Paso 6 — Instalación y comprobaciones
+Después continúa con el paso 4 del camino rápido. `AUTH_SECRET` es opcional: si no lo pones se deriva de la clave de Supabase.
 
-1. Abre la dirección de tu proyecto (por ejemplo `https://ia-xxxx.vercel.app`). Te llevará a **Instalación de TRAPERO AI**.
-2. Escribe tu `SETUP_CODE`, tu nombre, tu correo y una contraseña (mínimo 10 caracteres con letras y números) → **Crear administrador**.
-3. Ve a **Modelos y proveedores** → **Comprobar ahora**:
-   - Cada proveedor con clave debe decir «conectado».
-   - Si algún modelo aparece con ✗ («no existe»), cambia su **ID en la API** en su ficha por uno de la lista del proveedor y pulsa **Guardar**. (Los modelos gratuitos cambian con frecuencia.)
-4. **Nueva conversación** → escribe «Hola» → debe responder un modelo con la etiqueta «gratis».
-5. Adjunta un documento pequeño (PDF o Word) y pregunta por él. ✅ Esto confirma que Supabase Storage funciona.
-6. Pulsa **Comparar**, haz una pregunta y comprueba que responden varios modelos.
-7. En **Consumo y costes** el coste debe ser **0,00 $**.
-
-Si algún paso falla, anota el mensaje exacto que aparece y la hora.
-
-## Paso 7 — Invitar al equipo
+## Invitar al equipo
 
 **Usuarios y roles** → **Añadir usuario**. Se genera una contraseña temporal que debes enviar por un canal seguro; la persona deberá cambiarla en su primer acceso.
 

@@ -5,7 +5,7 @@
   "description": "TRAPERO AI — centro de operaciones de inteligencia artificial (GPT + Claude + Gemini)",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --skip-generate && next build",
+    "build": "node scripts/build.mjs",
     "build:local": "prisma generate && next build",
     "start": "next start",
     "postinstall": "prisma generate",

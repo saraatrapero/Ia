@@ -1,12 +1,16 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
+import { ConfigProblems } from "@/components/config-problems";
 import { db } from "@/lib/db";
+import { configProblems } from "@/lib/env";
 import { LoginForm } from "./login-form";
 
 export const metadata = { title: "Acceso" };
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
+  const problems = configProblems();
+  if (problems.length) return <ConfigProblems problems={problems} />;
   if ((await db.user.count()) === 0) redirect("/setup");
   if (await getCurrentUser()) redirect("/");
   return (

@@ -65,3 +65,10 @@ Fecha: 22/11/2026
 - `npm run build:local`: compilación de producción correcta.
 - Prueba de extremo a extremo en navegador (Chromium) contra **PostgreSQL 16 real** y **servidores simulados** de Gemini, Groq, OpenRouter, OpenAI y Anthropic (no había claves reales disponibles): instalación, selector, documentos, segunda opinión, comparación con persistencia, exportación Word/Excel, comprobación de proveedores, coste 0, tema claro, móvil, usuarios, permisos, CSRF y aislamiento de archivos.
 - **No verificado:** llamadas reales a las API de los proveedores y Supabase Storage real (no hay acceso de red a esos servicios desde el entorno de desarrollo). Es la primera comprobación a hacer tras el despliegue (ver `DESPLIEGUE.md`, paso 6).
+
+## Actualización — despliegue simplificado
+
+- La aplicación usa automáticamente las variables que crea la integración Supabase-Vercel (`POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`). Solo hay que configurar a mano `SETUP_CODE` y una clave de IA.
+- `AUTH_SECRET` pasa a ser opcional: si falta, la clave de firma se deriva (SHA-256 con etiqueta propia) de un secreto de servidor de Supabase.
+- Si falta configuración, la web lo explica en una pantalla «Configuración pendiente» en lugar de fallar; la compilación funciona aunque aún no haya base de datos.
+- Verificado: compilación sin base de datos; pantalla de configuración pendiente; compilación y prueba completa de extremo a extremo usando solo los nombres de variables de la integración (sin `DATABASE_URL` ni `AUTH_SECRET`). No verificado contra Vercel y Supabase reales.

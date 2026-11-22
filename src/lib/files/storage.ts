@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { storageDriver as resolveDriver, supabaseServiceKey, supabaseUrl } from "../env";
 
 /**
  * Almacenamiento de archivos con dos controladores:
@@ -11,7 +12,7 @@ import path from "node:path";
  */
 type Kind = "uploads" | "generated";
 
-const DRIVER = (process.env.STORAGE_DRIVER || "local").toLowerCase();
+const DRIVER = resolveDriver();
 
 // ─── Local ────────────────────────────────────────────────────
 const ROOT = path.resolve(process.env.STORAGE_DIR || "./storage");
@@ -24,8 +25,8 @@ function resolveLocal(rel: string) {
 
 // ─── Supabase Storage (API REST) ──────────────────────────────
 function sb() {
-  const url = process.env.SUPABASE_URL?.replace(/\/$/, "");
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = supabaseUrl()?.replace(/\/$/, "");
+  const key = supabaseServiceKey();
   const bucket = process.env.SUPABASE_BUCKET || "trapero-files";
   if (!url || !key) throw new Error("Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY para el almacenamiento.");
   return { url, bucket, headers: { Authorization: `Bearer ${key}`, apikey: key } };

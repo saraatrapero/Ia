@@ -1,11 +1,15 @@
 import { redirect } from "next/navigation";
+import { ConfigProblems } from "@/components/config-problems";
 import { db } from "@/lib/db";
+import { configProblems } from "@/lib/env";
 import { SetupForm } from "./setup-form";
 
 export const metadata = { title: "Instalación" };
 export const dynamic = "force-dynamic";
 
 export default async function SetupPage() {
+  const problems = configProblems();
+  if (problems.length) return <ConfigProblems problems={problems} />;
   if ((await db.user.count()) > 0) redirect("/login");
   return (
     <main className="flex min-h-dvh items-center justify-center px-4 py-10">
