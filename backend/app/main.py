@@ -227,7 +227,7 @@ async def upload_file(upload: UploadFile = File(...), authorization: str | None 
     data = await upload.read()
     if len(data) > 20 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="El archivo supera 20 MB")
-    destination = STORAGE_PATH / f"{user_id}_{secrets.token_hex(8)}_{Path(upload.filename or 'file').name}"
+    destination = STORAGE_PATH / f"{user_id}_{secrets.token_hex(16)}.upload"
     destination.write_bytes(data)
     with get_connection() as connection:
         cursor = connection.execute(
@@ -240,8 +240,7 @@ async def upload_file(upload: UploadFile = File(...), authorization: str | None 
 @app.post("/api/documents")
 def create_document(request: DocumentRequest, authorization: str | None = Header(default=None)):
     require_user(authorization)
-    safe_name = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in request.title)[:80]
-    path = STORAGE_PATH / f"{safe_name or 'document'}_{secrets.token_hex(6)}.{request.format}"
+    path = STORAGE_PATH / f"document_{secrets.token_hex(16)}.{request.format}"
 
     if request.format == "txt":
         path.write_text(request.content, encoding="utf-8")
