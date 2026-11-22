@@ -1,0 +1,28 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      TRAPERO_APP_SECRET: ${TRAPERO_APP_SECRET:-change-this-before-production}
+      TRAPERO_CORS_ORIGINS: ${TRAPERO_CORS_ORIGINS:-http://localhost:3000}
+      TRAPERO_DATABASE: /data/trapero-ai.db
+      TRAPERO_STORAGE: /data/storage
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    volumes:
+      - trapero-data:/data
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  trapero-data:

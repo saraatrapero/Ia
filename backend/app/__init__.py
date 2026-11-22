@@ -1,0 +1,1 @@
+"""TRAPERO AI backend application."""
