@@ -6,7 +6,8 @@ function getClient() {
   if (!client)
     client = new GoogleGenAI({
       apiKey: process.env.GEMINI_API_KEY,
-      ...(process.env.GEMINI_BASE_URL ? { httpOptions: { baseUrl: process.env.GEMINI_BASE_URL } } : {}),
+      // v1beta incluye los modelos «preview»; la versión estable (v1, por defecto en el SDK) no los ofrece
+      httpOptions: { apiVersion: "v1beta", ...(process.env.GEMINI_BASE_URL ? { baseUrl: process.env.GEMINI_BASE_URL } : {}) },
     });
   return client;
 }
@@ -18,8 +19,12 @@ export const googleAdapter: ProviderAdapter = {
   async listModels() {
     try {
       const ids: string[] = [];
-      const pager = await getClient().models.list();
-      for await (const m of pager) if (m.name) ids.push(m.name.replace(/^models\//, ""));
+      let pager = await getClient().models.list({ config: { pageSize: 1000 } });
+      for (let pages = 0; pages < 20; pages++) {
+        for (const m of pager.page) if (m.name) ids.push(m.name.replace(/^models\//, ""));
+        if (!pager.hasNextPage()) break;
+        await pager.nextPage();
+      }
       return ids;
     } catch (err) {
       if (err instanceof ApiError) throw new ProviderError("google", `Error de Google (${err.status}): ${err.message}`);
@@ -57,6 +62,8 @@ export const googleAdapter: ProviderAdapter = {
       if (err instanceof ApiError) {
         if (err.status === 429)
           throw new ProviderError("google", "Límite de uso de Gemini alcanzado (en el nivel gratuito es por minuto y por día). Prueba con otro modelo o espera.", true);
+        if (err.status === 503)
+          throw new ProviderError("google", "Gemini está saturado en este momento (alta demanda). Se prueba con otro modelo.", true);
         if (err.status === 404)
           throw new ProviderError("google", "Google no reconoce el modelo. Revisa su identificador en Administración → Modelos.", true);
         if (err.status === 401 || err.status === 403)

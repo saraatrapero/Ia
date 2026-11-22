@@ -159,13 +159,27 @@ export type RunResult =
  * Ejecuta un modelo en streaming, guarda la respuesta y registra el consumo (también los errores).
  * Si falla sin haber emitido texto devuelve ok:false para que el llamador pueda conmutar de proveedor.
  */
+/** Si un modelo no empieza a responder en este tiempo se corta y se prueba otro. */
+const FIRST_TOKEN_TIMEOUT_MS = 20_000;
+
 export async function runModel(o: RunOptions): Promise<RunResult> {
   let text = "";
   const started = Date.now();
+  // Señal propia: se cancela si el usuario detiene o si el modelo no arranca a tiempo
+  const ctrl = new AbortController();
+  const onUserAbort = () => ctrl.abort();
+  o.signal.addEventListener("abort", onUserAbort);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    if (!text) {
+      timedOut = true;
+      ctrl.abort();
+    }
+  }, FIRST_TOKEN_TIMEOUT_MS);
   const usageBase = { userId: o.user.id, conversationId: o.conversationId, modelId: o.model.id, provider: o.model.provider, source: o.source };
   try {
     const result = await PROVIDERS[o.model.provider as ProviderId].stream(
-      { apiModel: o.model.apiModel, system: o.system, messages: o.turns, signal: o.signal },
+      { apiModel: o.model.apiModel, system: o.system, messages: o.turns, signal: ctrl.signal },
       (delta) => {
         text += delta;
         o.onDelta(delta);
@@ -192,9 +206,14 @@ export async function runModel(o: RunOptions): Promise<RunResult> {
     return { ok: true, message, inputTokens: result.inputTokens, outputTokens: result.outputTokens, costUsd: cost };
   } catch (err) {
     const aborted = o.signal.aborted;
-    const error =
-      err instanceof ProviderError ? err.message : aborted ? "Detenido por el usuario." : "Error inesperado al contactar con el modelo.";
-    if (!(err instanceof ProviderError) && !aborted) console.error(err);
+    const error = timedOut
+      ? `${o.model.label} no empezó a responder en ${FIRST_TOKEN_TIMEOUT_MS / 1000} s (posible saturación).`
+      : err instanceof ProviderError
+        ? err.message
+        : aborted
+          ? "Detenido por el usuario."
+          : "Error inesperado al contactar con el modelo.";
+    if (!(err instanceof ProviderError) && !aborted && !timedOut) console.error(err);
     await db.usageRecord.create({
       data: { ...usageBase, inputTokens: 0, outputTokens: 0, costUsd: 0, latencyMs: Date.now() - started, status: "error", error: error.slice(0, 500) },
     });
@@ -212,5 +231,8 @@ export async function runModel(o: RunOptions): Promise<RunResult> {
       });
     }
     return { ok: false, error, aborted, partial: text };
+  } finally {
+    clearTimeout(timer);
+    o.signal.removeEventListener("abort", onUserAbort);
   }
 }
