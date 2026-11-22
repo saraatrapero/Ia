@@ -118,9 +118,16 @@ export function routeModel<M extends RoutableModel>(input: RouteInput, available
 
 /** Ordena los candidatos para conmutar si el elegido falla: otro proveedor y, si es posible, misma categoría. */
 export function fallbackOrder<M extends RoutableModel>(failed: M, available: M[], tried: Set<string>): M[] {
+  // Primero otros proveedores; después otros modelos del mismo proveedor (cupos y saturación suelen ser por modelo)
   return available
-    .filter((m) => !tried.has(m.id) && m.provider !== failed.provider)
-    .sort((a, b) => Number(b.tier === failed.tier) - Number(a.tier === failed.tier) || avgPrice(a) - avgPrice(b) || a.sortOrder - b.sortOrder);
+    .filter((m) => !tried.has(m.id))
+    .sort(
+      (a, b) =>
+        Number(b.provider !== failed.provider) - Number(a.provider !== failed.provider) ||
+        Number(b.tier === failed.tier) - Number(a.tier === failed.tier) ||
+        avgPrice(a) - avgPrice(b) ||
+        a.sortOrder - b.sortOrder,
+    );
 }
 
 /** Elige un revisor de otro proveedor para la «segunda opinión». */

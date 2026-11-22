@@ -50,10 +50,14 @@ describe("selector automático", () => {
 });
 
 describe("respaldo, revisión y comparación", () => {
-  it("el respaldo cambia de proveedor", () => {
+  it("el respaldo prueba antes otro proveedor", () => {
     const order = fallbackOrder(FREE[1], FREE, new Set(["groq-gpt-oss"]));
-    assert.ok(order.length > 0);
-    assert.ok(order.every((x) => x.provider !== "groq"));
+    assert.equal(order[0].provider, "google");
+    assert.deepEqual(order.map((x) => x.id), ["gemini-flash", "groq-llama"]);
+  });
+  it("con un solo proveedor, el respaldo usa otro modelo del mismo", () => {
+    const solo = [FREE[0], m("gemini-lite", "google", "fast", "general,fast", true, 0.1, 1_000_000, 3)];
+    assert.deepEqual(fallbackOrder(solo[0], solo, new Set(["gemini-flash"])).map((x) => x.id), ["gemini-lite"]);
   });
   it("el revisor es de otro proveedor", () => {
     assert.notEqual(pickReviewer("google", [...FREE, ...PAID])!.provider, "google");
